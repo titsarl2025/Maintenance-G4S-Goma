@@ -2,223 +2,181 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Suivi Maintenance G4S</title>
+  <title>Suivi des Interventions - G4S Goma</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background-color: #f4f4f4;
-    }
-    h1 {
-      text-align: center;
-    }
-    .logo {
-      display: block;
-      margin: 0 auto;
-      max-width: 180px;
-    }
-    form, table {
-      background: #fff;
-      padding: 20px;
-      margin-bottom: 30px;
-      border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    input, select, textarea, button {
-      display: block;
-      width: 100%;
-      margin: 10px 0;
-      padding: 8px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-    }
-    th {
-      background-color: #007bff;
-      color: white;
-    }
-    .btn-actions {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 30px;
-    }
-    .btn-actions button {
-      flex: 1;
-      padding: 10px;
-      font-weight: bold;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      cursor: pointer;
-      border-radius: 5px;
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .logo { height: 80px; }
+    form, table, .btn-actions, #graphique { margin-bottom: 20px; }
+    form label { display: block; margin-top: 10px; }
+    form input, form select, form textarea { width: 100%; margin-top: 5px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background: #f8f8f8; }
+    .btn-actions button { margin-right: 10px; }
+    #graphique { max-width: 600px; }
   </style>
 </head>
 <body>
+  <img src="G4S_One-Company_Logo_180x136.png" alt="Logo G4S" class="logo">
+  <h1>Suivi des Interventions - G4S Goma</h1>
 
-<img src="G4S_One-Company_Logo_180x136.png" alt="Logo G4S" class="logo">
-<h1>Suivi des Interventions - G4S Goma</h1>
+  <form id="form-intervention">
+    <label for="date">Date :</label>
+    <input type="date" id="date" required>
 
-<form id="form-intervention">
-  <label for="date">Date :</label>
-  <input type="date" id="date" required>
+    <label for="site">Site :</label>
+    <input type="text" id="site" required>
 
-  <label for="site">Site :</label>
-  <input type="text" id="site" required>
+    <label for="equipement">Équipement :</label>
+    <input type="text" id="equipement" required>
 
-  <label for="equipement">Équipement :</label>
-  <input type="text" id="equipement" required>
+    <label for="type">Type d'intervention :</label>
+    <select id="type">
+      <option>Préventive</option>
+      <option>Corrective</option>
+      <option>Urgente</option>
+    </select>
 
-  <label for="type">Type d'intervention :</label>
-  <select id="type">
-    <option>Préventive</option>
-    <option>Corrective</option>
-    <option>Urgente</option>
-  </select>
+    <label for="technicien">Technicien :</label>
+    <input type="text" id="technicien" required>
 
-  <label for="technicien">Technicien :</label>
-  <input type="text" id="technicien" required>
+    <label for="description">Description :</label>
+    <textarea id="description"></textarea>
 
-  <label for="description">Description :</label>
-  <textarea id="description"></textarea>
+    <button type="submit">Enregistrer l'intervention</button>
+  </form>
 
-  <button type="submit">Enregistrer l'intervention</button>
-</form>
+  <div class="btn-actions">
+    <button onclick="exportCSV()">Télécharger les données (CSV)</button>
+    <button onclick="exportPDF()">Exporter le tableau en PDF</button>
+  </div>
 
-<div class="btn-actions">
-  <button onclick="exportCSV()">Télécharger les données (CSV)</button>
-  <button onclick="exportPDF()">Exporter le tableau en PDF</button>
-</div>
+  <table id="table-interventions">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Site</th>
+        <th>Équipement</th>
+        <th>Type</th>
+        <th>Technicien</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-<table id="table-interventions">
-  <thead>
-    <tr>
-      <th>Date</th>
-      <th>Site</th>
-      <th>Équipement</th>
-      <th>Type</th>
-      <th>Technicien</th>
-      <th>Description</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
+  <canvas id="graphique"></canvas>
 
-<canvas id="graphique"></canvas>
+  <script>
+    const form = document.getElementById('form-intervention');
+    const tableBody = document.querySelector('#table-interventions tbody');
+    const dataCount = { 'Préventive': 0, 'Corrective': 0, 'Urgente': 0 };
 
-<script>
-const form = document.getElementById('form-intervention');
-const tableBody = document.querySelector('#table-interventions tbody');
-const dataCount = { 'Préventive': 0, 'Corrective': 0, 'Urgente': 0 };
+    // Charger les données enregistrées
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedData = JSON.parse(localStorage.getItem('interventions')) || [];
+      savedData.forEach(data => addRow(data));
+      updateChart();
+    });
 
-// Charger les données enregistrées
-window.addEventListener('DOMContentLoaded', () => {
-  const savedData = JSON.parse(localStorage.getItem('interventions')) || [];
-  savedData.forEach(data => addRow(data));
-  updateChart();
-});
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const data = {
+        date: document.getElementById('date').value,
+        site: document.getElementById('site').value,
+        equipement: document.getElementById('equipement').value,
+        type: document.getElementById('type').value,
+        technicien: document.getElementById('technicien').value,
+        description: document.getElementById('description').value
+      };
+      addRow(data);
+      saveData();
+      updateChart();
+      form.reset();
+    });
 
-form.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const data = {
-    date: document.getElementById('date').value,
-    site: document.getElementById('site').value,
-    equipement: document.getElementById('equipement').value,
-    type: document.getElementById('type').value,
-    technicien: document.getElementById('technicien').value,
-    description: document.getElementById('description').value
-  };
-
-  addRow(data);
-  saveData();
-  updateChart();
-  form.reset();
-});
-
-function addRow(data) {
-  const row = document.createElement('tr');
-  row.innerHTML = `<td>${data.date}</td><td>${data.site}</td><td>${data.equipement}</td><td>${data.type}</td><td>${data.technicien}</td><td>${data.description}</td>`;
-  tableBody.appendChild(row);
-  dataCount[data.type]++;
-}
-
-function saveData() {
-  const rows = Array.from(tableBody.querySelectorAll('tr')).map(row => {
-    const cells = row.querySelectorAll('td');
-    return {
-      date: cells[0].innerText,
-      site: cells[1].innerText,
-      equipement: cells[2].innerText,
-      type: cells[3].innerText,
-      technicien: cells[4].innerText,
-      description: cells[5].innerText
-    };
-  });
-  localStorage.setItem('interventions', JSON.stringify(rows));
-}
-
-function exportCSV() {
-  const rows = Array.from(document.querySelectorAll('table tr'));
-  const csv = rows.map(row => Array.from(row.children).map(cell => '"' + cell.innerText + '"').join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.setAttribute('href', URL.createObjectURL(blob));
-  link.setAttribute('download', 'interventions_g4s.csv');
-  link.click();
-}
-
-function exportPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.text("Rapport des Interventions - G4S", 10, 10);
-  let y = 20;
-  document.querySelectorAll("#table-interventions tbody tr").forEach(row => {
-    let text = Array.from(row.children).map(cell => cell.innerText).join(" | ");
-    doc.text(text, 10, y);
-    y += 10;
-  });
-  doc.save("rapport_g4s.pdf");
-}
-
-function updateChart() {
-  chart.data.datasets[0].data = [dataCount['Préventive'], dataCount['Corrective'], dataCount['Urgente']];
-  chart.update();
-}
-
-const ctx = document.getElementById('graphique');
-const chart = new Chart(ctx, {
-  type: 'bar',
-  data: {
-    labels: ['Préventive', 'Corrective', 'Urgente'],
-    datasets: [{
-      label: 'Nombre d’interventions',
-      data: [0, 0, 0],
-      backgroundColor: ['#28a745', '#ffc107', '#dc3545']
-    }]
-  },
-  options: {
-    responsive: true,
-    plugins: {
-      legend: { position: 'top' },
-      title: {
-        display: true,
-        text: 'Statistiques des interventions'
-      }
+    function addRow(data) {
+      const row = document.createElement('tr');
+      row.innerHTML = `<td>${data.date}</td><td>${data.site}</td><td>${data.equipement}</td><td>${data.type}</td><td>${data.technicien}</td><td>${data.description}</td>`;
+      tableBody.appendChild(row);
+      dataCount[data.type]++;
     }
-  }
-});
-</script>
 
+    function saveData() {
+      const rows = Array.from(tableBody.querySelectorAll('tr')).map(row => {
+        const cells = row.querySelectorAll('td');
+        return {
+          date: cells[0].innerText,
+          site: cells[1].innerText,
+          equipement: cells[2].innerText,
+          type: cells[3].innerText,
+          technicien: cells[4].innerText,
+          description: cells[5].innerText
+        };
+      });
+      localStorage.setItem('interventions', JSON.stringify(rows));
+    }
+
+    function exportCSV() {
+      const rows = Array.from(document.querySelectorAll('table tr'));
+      const csv = rows.map(row => Array.from(row.children).map(cell => '"' + cell.innerText + '"').join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.setAttribute('href', URL.createObjectURL(blob));
+      link.setAttribute('download', 'interventions_g4s.csv');
+      link.click();
+    }
+
+    function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text("Rapport des Interventions - G4S", 10, 10);
+      let y = 20;
+      document.querySelectorAll("#table-interventions tbody tr").forEach(row => {
+        let text = Array.from(row.children).map(cell => cell.innerText).join(" | ");
+        doc.text(text, 10, y);
+        y += 10;
+      });
+      doc.save("rapport_g4s.pdf");
+    }
+
+    function updateChart() {
+      chart.data.datasets[0].data = [dataCount['Préventive'], dataCount['Corrective'], dataCount['Urgente']];
+      chart.update();
+    }
+
+    const ctx = document.getElementById('graphique');
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Préventive', 'Corrective', 'Urgente'],
+        datasets: [{
+          label: 'Nombre d’interventions',
+          data: [0, 0, 0],
+          backgroundColor: ['#28a745', '#ffc107', '#dc3545']
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: {
+            display: true,
+            text: 'Statistiques des interventions'
+          }
+        }
+      }
+    });
+  </script>
 </body>
 </html>
+     
 
+
+
+
+  
+   
      
